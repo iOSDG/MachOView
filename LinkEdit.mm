@@ -4,8 +4,12 @@
  *
  *  Created by psaghelyi on 20/07/2010.
  *
+ *  本文件实现 MachOLayout 的 LinkEdit 分类：解析 __LINKEDIT 段内重定位、符号表、
+ *  间接符号、TOC、模块表、两级 Hints、Split Segment、函数起始、Data In Code 等，
+ *  并更新 realData 中的重定位目标值供反汇编/数据展示使用。
  */
 
+// C++ 标准库：用于字符串、向量、集合、映射等容器
 #include <string>
 #include <vector>
 #include <set>
@@ -25,61 +29,70 @@
 using namespace std;
 
 //============================================================================
+// MachOLayout (LinkEdit) 实现
+//============================================================================
 @implementation MachOLayout (LinkEdit)
 
 //-----------------------------------------------------------------------------
+// 创建 32 位重定位节点：遍历 length 内的 relocation_info，区分普通与 R_SCATTERED；
+// baseAddress 为包含重定位的 section 的起始地址（镜像内为第一个 segment 的起始）
 - (MVNode *) createRelocNode:(MVNode *)parent
                      caption:(NSString *)caption
                     location:(uint64_t)location
                       length:(uint64_t)length
-                 baseAddress:(uint32_t)baseAddress // start of the section containing the relocation (image: start of the first segment)
+                 baseAddress:(uint32_t)baseAddress
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:length saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:length saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 校验 mach_header 与 imageOffset 对齐，供后续按架构分支
   MATCH_STRUCT(mach_header,imageOffset);
   
-  struct scattered_relocation_info const * prev_scattered_relocation_info = NULL; // for sectdiff & pair
+  // 用于 SECTDIFF/PAIR 成对重定位：记录上一条 scattered 条目
+  struct scattered_relocation_info const * prev_scattered_relocation_info = NULL;
   
+  // 按条目数遍历重定位表
   for (uint32_t nreloc = 0; nreloc < length / sizeof(struct relocation_info); ++nreloc)
   {
     if ([backgroundThread isCancelled]) break;
     
-    // normal:    relocation_info != NULL, scattered_relocation_info == NULL
-    // scattered: relocation_info == NULL, scattered_relocation_info != NULL
-    
+    // 普通条目：relocation_info 有效，scattered 为 NULL；分散条目：反之
     MATCH_STRUCT(relocation_info,location + nreloc * sizeof(struct relocation_info))
     
     struct scattered_relocation_info const * scattered_relocation_info = NULL;
     
+    // 若 r_address 带 R_SCATTERED，则整条为 scattered_relocation_info
     if (relocation_info->r_address & R_SCATTERED)
     {
       scattered_relocation_info = (struct scattered_relocation_info const *)relocation_info;
       relocation_info = NULL;
     }
     
-    // accumulate search info
+    // 记录当前行索引，用于后续设置该行的元数据（符号名、颜色）
     NSUInteger bookmark = node.details.rowCount;
     NSString * symbolName = nil;
     NSColor * color = nil;
     
-    // read the first half of the entry
+    // 读取本条目的第一个 32 位（地址或 scattered 高半部分）
     [dataController read_uint32:range lastReadHex:&lastReadHex];
+    // 显示重定位地址（相对 baseAddress）
     [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                            :lastReadHex
                            :@"Address"
-                           :[NSString stringWithFormat:@"0x%X", relocation_info 
-                             ? relocation_info->r_address + baseAddress 
+                           :[NSString stringWithFormat:@"0x%X", relocation_info
+                             ? relocation_info->r_address + baseAddress
                              : scattered_relocation_info->r_address + baseAddress]];
     
+    // 标记是否为分散重定位
     [node.details appendRow:@"":@"":@"Scattered":scattered_relocation_info ? @"True" : @"False"];
     
-    // read the second half of the entry
+    // 读取本条目的第二个 32 位（符号/类型/长度等）
     [dataController read_uint32:range lastReadHex:&lastReadHex];
     
+    // 普通重定位：计算目标值并写回 realData，并追加 Symbol/Section、Type、External、PCRelative、Length 等行
     if (relocation_info)
     {
       uint64_t relocLocation = [self RVAToFileOffset:baseAddress + relocation_info->r_address];
@@ -180,10 +193,9 @@ using namespace std;
       // update real data
       [self addRelocAtFileOffset:relocLocation withLength:relocLength andValue:relocValue];
       //NSLog(@"%@ %.8X --> %@",[self findSectionContainsRVA:[self fileOffsetToRVA:relocLocation]],[self fileOffsetToRVA:relocLocation],[self findSymbolAtRVA:relocValue]);
-    } 
-    else 
-      
-    //=============================== scattered relocation ===============================
+    }
+    // 分散重定位：处理 SECTDIFF/PAIR 对，或显示 r_value 对应符号
+    else
       
     if (scattered_relocation_info)
     {
@@ -295,51 +307,51 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 64 位重定位节点：x86_64/ARM64 下无 scattered，多为外部符号重定位；支持 SUBTRACTOR+UNSIGNED 对表示 "add_symbol - subtract_symbol + addend"
+// baseAddress 为包含重定位的 section 的起始地址
 - (MVNode *) createReloc64Node:(MVNode *)parent
                        caption:(NSString *)caption
                       location:(uint64_t)location
                         length:(uint64_t)length
-                   baseAddress:(uint64_t)baseAddress // start of the section containing the relocation (image: start of the first segment)
+                   baseAddress:(uint64_t)baseAddress
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:length saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:length saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
   MATCH_STRUCT(mach_header_64,imageOffset);
   
+  // SUBTRACTOR 后紧跟 UNSIGNED 时，上一条保存为 prev，用于计算两符号差
   struct relocation_info const * prev_relocation_info = NULL;
   
   for (uint32_t nreloc = 0; nreloc < length / sizeof(struct relocation_info); ++nreloc)
   {
     if ([backgroundThread isCancelled]) break;
     
-    // In the Mac OS X x86-64 environment scattered relocations are not used. Compiler-generated code
-    // uses mostly external relocations, in which the r_extern bit is set to 1 and the r_symbolnum field contains
-    // the symbol-table index of the target label.
-    
+    // x86_64 下不使用 scattered；多为 r_extern=1，r_symbolnum 为符号表索引
     MATCH_STRUCT(relocation_info,location + nreloc * sizeof(struct relocation_info))
     
+    // 重定位长度：2^r_length 字节（4 或 8）
     uint32_t relocLength = (1 << relocation_info->r_length);
     NSAssert1(relocLength == sizeof(uint32_t) || relocLength == sizeof(uint64_t), @"unsupported reloc length (%u)", relocLength);
     
-    // accumulate search info
     NSUInteger bookmark = node.details.rowCount;
     NSString * symbolName = nil;
     NSColor * color = nil;
 
-    // read the first half of the entry
+    // 读取第一条 32 位（地址）
     [dataController read_uint32:range lastReadHex:&lastReadHex];
     [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                            :lastReadHex
                            :@"Address"
                            :[NSString stringWithFormat:@"0x%qX", relocation_info->r_address + baseAddress]];
 
-    // read the second half of the entry
+    // 读取第二条 32 位（符号索引/类型/长度等）
     [dataController read_uint32:range lastReadHex:&lastReadHex];
     
-    //========================================================================
+    // 外部符号重定位：根据 r_symbolnum 取符号，处理 SUBTRACTOR+UNSIGNED 对或单符号本地/外部引用
     if (relocation_info->r_extern)
     {
       uint64_t relocLocation = [self RVAToFileOffset:baseAddress + relocation_info->r_address];
@@ -692,7 +704,9 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
-- (MVNode *) createSymbolsNode:parent 
+//-----------------------------------------------------------------------------
+// 创建 32 位符号表节点：遍历 nlist 数组，每项显示 n_strx（名称）、n_type、n_sect、n_desc、n_value，名称从 strtab 按 n_strx 取
+- (MVNode *) createSymbolsNode:parent
                        caption:(NSString *)caption
                       location:(uint64_t)location
                         length:(uint64_t)length
@@ -862,7 +876,9 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
-- (MVNode *) createSymbols64Node:parent 
+//-----------------------------------------------------------------------------
+// 创建 64 位符号表节点：遍历 nlist_64 数组，字段同 32 位但 n_value 为 64 位
+- (MVNode *) createSymbols64Node:parent
                          caption:(NSString *)caption
                         location:(uint64_t)location
                           length:(uint64_t)length
@@ -1026,7 +1042,9 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
-- (MVNode *) createReferencesNode:parent 
+//-----------------------------------------------------------------------------
+// 创建外部引用表节点：解析 LC_DYSYMTAB 的 extrefsymoff/nextrefsyms 指向的 extrel_entry 数组（符号索引、flags）
+- (MVNode *) createReferencesNode:parent
                           caption:(NSString *)caption
                          location:(uint64_t)location
                            length:(uint64_t)length
@@ -1080,6 +1098,8 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// 创建 32 位间接符号表节点：解析 indirectsymoff/nindirectsyms 的 uint32_t 数组，每项为符号表索引或 INDIRECT_SYMBOL_*
 - (MVNode *) createISymbolsNode:parent
                         caption:(NSString *)caption
                        location:(uint64_t)location
@@ -1208,6 +1228,8 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// 创建 64 位间接符号表节点：格式同 32 位，条目仍为 uint32_t 索引
 - (MVNode *) createISymbols64Node:parent
                           caption:(NSString *)caption
                          location:(uint64_t)location
@@ -1336,6 +1358,8 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// 创建 32 位 TOC 表节点：解析 dysymtab 的 tocoff/ntoc，每项为 toc 模块索引与符号索引
 - (MVNode *) createTOCNode:parent
                    caption:(NSString *)caption
                   location:(uint64_t)location
@@ -1387,6 +1411,8 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// 创建 64 位 TOC 表节点：结构同 32 位 TOC
 - (MVNode *) createTOC64Node:parent
                      caption:(NSString *)caption
                     location:(uint64_t)location
@@ -1438,6 +1464,8 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// 创建 32 位模块表节点：解析 dylib_module 数组（module_name、iextdefsym、nextdefsym 等）
 - (MVNode *) createModulesNode:parent
                        caption:(NSString *)caption
                       location:(uint64_t)location
@@ -1550,6 +1578,8 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// 创建 64 位模块表节点：解析 dylib_module_64 数组
 - (MVNode *) createModules64Node:parent
                          caption:(NSString *)caption
                         location:(uint64_t)location
@@ -1662,7 +1692,9 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
-- (MVNode *) createTwoLevelHintsNode:parent 
+//-----------------------------------------------------------------------------
+// 创建两级 Hints 表节点：解析 twolevel_hint 数组，index 为 hints 在表中的起始索引，每项包含 isub_image、itoc
+- (MVNode *) createTwoLevelHintsNode:parent
                              caption:(NSString *)caption
                             location:(uint64_t)location
                               length:(uint64_t)length
@@ -1710,6 +1742,8 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// 创建 Segment Split Info 节点：解析 LC_SEGMENT_SPLIT_INFO 的字节流（拆分信息），baseAddress 为段基址
 - (MVNode *) createSplitSegmentNode:parent
                             caption:(NSString *)caption
                            location:(uint64_t)location
@@ -1785,6 +1819,8 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// 创建函数起始地址节点：解析 LC_FUNCTION_STARTS 的 ULEB128 序列得到各函数相对 baseAddress 的偏移
 - (MVNode *) createFunctionStartsNode:parent
                               caption:(NSString *)caption
                              location:(uint64_t)location
@@ -1817,6 +1853,8 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+// 创建 Data In Code 条目节点：解析 LC_DATA_IN_CODE 的 data_in_code_entry 数组（offset、length、kind）
 - (MVNode *) createDataInCodeEntriesNode:parent
                                  caption:(NSString *)caption
                                 location:(uint64_t)location

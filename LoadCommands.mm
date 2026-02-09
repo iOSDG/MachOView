@@ -6,6 +6,7 @@
  *
  */
 
+// C++ 标准库：字符串、向量、集合、映射，用于 segment/section 等容器与查找
 #include <string>
 #include <vector>
 #include <set>
@@ -20,17 +21,25 @@
 #include "thread_status.h"
 #include "thread_status_arm.h"
 
+// 使用 std 命名空间
 using namespace std;
 
+//============================================================================
+// MachOLayout (LoadCommands) 实现：解析各类 Load Command 并创建详情节点
 //============================================================================
 @implementation MachOLayout (LoadCommands)
 
 //-----------------------------------------------------------------------------
+// 根据 load command 类型码返回可读名称，未识别的类型返回 @"???"
+// 根据 Load Command 类型码返回可读名称，未识别则返回 @"???"
 - (NSString *)getNameForCommand:(uint32_t)cmd
 {
+    // 按 Mach-O 规范对所有已知 LC_* 类型做分支返回
     switch(cmd)
     {
+        // 未匹配到已知类型时返回占位符
         default:                      return @"???";
+        // 32 位段加载命令
         case LC_SEGMENT:              return @"LC_SEGMENT";
         case LC_SYMTAB:               return @"LC_SYMTAB";
         case LC_SYMSEG:               return @"LC_SYMSEG";
@@ -89,98 +98,119 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 32 位 LC_SEGMENT 节点：解析 segment_command（cmd/cmdsize/segname/vmaddr/vmsize/fileoff/filesize/maxprot/initprot/nsects/flags）并逐字段追加详情行
 - (MVNode *)createLCSegmentNode:(MVNode *)parent
                       caption:(NSString *)caption
                      location:(uint64_t)location
               segment_command:(struct segment_command const *)segment_command
 {
+  // 用于在插入子节点时保存/恢复选中状态
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:segment_command->cmdsize saver:nodeSaver]; 
+  // 在父节点下插入一个子节点，标题为 caption，范围 [location, location+cmdsize)
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:segment_command->cmdsize saver:nodeSaver];
   
+  // 从 location 开始顺序读取，range 会随 read_* 推进
   NSRange range = NSMakeRange(location,0);
+  // 每次读取后得到最后一行的十六进制字符串，用于详情表“Hex”列
   NSString * lastReadHex;
   
+  // 读取 cmd（4 字节）并追加 Command 行，显示可读名称
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Command"
                          :[self getNameForCommand:segment_command->cmd]];
 
+  // 将该行设为绿色以标识“命令头”字段
   [node.details setAttributes:MVCellColorAttributeName,[NSColor greenColor],nil];
   
+  // 读取 cmdsize（4 字节）并追加 Command Size 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Command Size"
                          :[NSString stringWithFormat:@"%u", segment_command->cmdsize]];
   
+  // 命令头两行加下划线
   [node.details setAttributes:MVCellColorAttributeName,[NSColor greenColor],
                               MVUnderlineAttributeName,@"YES",nil];
   
+  // 读取 segname（16 字节定长），追加 Segment Name 行
   [dataController read_string:range fixlen:16 lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Segment Name"
                          :[NSString stringWithFormat:@"%s", string(segment_command->segname,16).c_str()]];
   
+  // 读取 vmaddr（4 字节），追加 VM Address 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"VM Address"
                          :[NSString stringWithFormat:@"0x%X", segment_command->vmaddr]];
   
+  // 读取 vmsize（4 字节），追加 VM Size 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"VM Size"
                          :[NSString stringWithFormat:@"%u", segment_command->vmsize]];
   
+  // 读取 fileoff（4 字节），追加 File Offset 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"File Offset"
                          :[NSString stringWithFormat:@"%u", segment_command->fileoff]];
   
+  // 读取 filesize（4 字节），追加 File Size 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"File Size"
                          :[NSString stringWithFormat:@"%u", segment_command->filesize]];
   
+  // 读取 maxprot（4 字节），追加 Maximum VM Protection 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Maximum VM Protection"
                          :@""];
   
+  // 按位解析 maxprot：无/读/写/执行
   if (segment_command->maxprot == VM_PROT_NONE)    [node.details appendRow:@"":@"":@"00000000":@"VM_PROT_NONE"];
   if (segment_command->maxprot & VM_PROT_READ)     [node.details appendRow:@"":@"":@"00000001":@"VM_PROT_READ"];
   if (segment_command->maxprot & VM_PROT_WRITE)    [node.details appendRow:@"":@"":@"00000002":@"VM_PROT_WRITE"];
   if (segment_command->maxprot & VM_PROT_EXECUTE)  [node.details appendRow:@"":@"":@"00000004":@"VM_PROT_EXECUTE"];
   
+  // 读取 initprot（4 字节），追加 Initial VM Protection 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Initial VM Protection"
                          :@""];
   
+  // 按位解析 initprot
   if (segment_command->initprot == VM_PROT_NONE)   [node.details appendRow:@"":@"":@"00000000":@"VM_PROT_NONE"];
   if (segment_command->initprot & VM_PROT_READ)    [node.details appendRow:@"":@"":@"00000001":@"VM_PROT_READ"];
   if (segment_command->initprot & VM_PROT_WRITE)   [node.details appendRow:@"":@"":@"00000002":@"VM_PROT_WRITE"];
   if (segment_command->initprot & VM_PROT_EXECUTE) [node.details appendRow:@"":@"":@"00000004":@"VM_PROT_EXECUTE"];
   
+  // 读取 nsects（4 字节），追加 Number of Sections 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Number of Sections"
                          :[NSString stringWithFormat:@"%u", segment_command->nsects]];
   
+  // 读取 flags（4 字节），追加 Flags 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Flags"
                          :@""];
   
+  // 按位解析 segment flags：高位 VM、FVMLIB、无重定位、保护版本 1、只读
     if (segment_command->flags & SG_HIGHVM) {
         [node.details appendRow:@"":@"":@"00000001":@"SG_HIGHVM"];
     }
@@ -200,6 +230,7 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 32 位 section 节点：解析 section 结构（sectname、segname、addr、size、offset、align、reloff、nreloc、flags、reserved1/2）
 - (MVNode *)createSectionNode:(MVNode *)parent
                     caption:(NSString *)caption
                    location:(uint64_t)location
@@ -207,65 +238,64 @@ using namespace std;
 {
   MVNodeSaver nodeSaver;
   MVNode * node = [parent insertChildWithDetails:caption location:location length:sizeof(struct section) saver:nodeSaver]; 
-  
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
-  
+  // 读 sectname（16 字节），追加 Section Name 行
   [dataController read_string:range fixlen:16 lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Section Name"
                          :[NSString stringWithFormat:@"%s", string(section->sectname,16).c_str()]];
-  
+  // 读 segname（16 字节），追加 Segment Name 行
   [dataController read_string:range fixlen:16 lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Segment Name"
                          :[NSString stringWithFormat:@"%s", string(section->segname,16).c_str()]];
-
+  // 读 addr（4 字节），追加 Address 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Address"
                          :[NSString stringWithFormat:@"0x%X", section->addr]];
-  
+  // 读 size（4 字节），追加 Size 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Size"
                          :[NSString stringWithFormat:@"%u", section->size]];
-  
+  // 读 offset（4 字节），追加 Offset 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Offset"
                          :[NSString stringWithFormat:@"%u", section->offset]];
-  
+  // 读 align（4 字节），追加 Alignment 行（显示为 2^align）
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Alignment"
                          :[NSString stringWithFormat:@"%u", (1 << section->align)]];
-  
+  // 读 reloff（4 字节），追加 Relocations Offset 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Relocations Offset"
                          :[NSString stringWithFormat:@"%u", section->reloff]];
-  
+  // 读 nreloc（4 字节），追加 Number of Relocations 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Number of Relocations"
                          :[NSString stringWithFormat:@"%u", section->nreloc]];
-  
+  // 读 flags（4 字节），追加 Flags 行
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Flags"
                          :@""];
-  
-    switch (section->flags & SECTION_TYPE)
+  // 按 SECTION_TYPE 分支追加类型名行（S_REGULAR、S_ZEROFILL 等）
+  switch (section->flags & SECTION_TYPE)
     {
         case S_REGULAR:                             [node.details appendRow:@"":@"":@"00000000":@"S_REGULAR"]; break;
         case S_ZEROFILL:                            [node.details appendRow:@"":@"":@"00000001":@"S_ZEROFILL"]; break;
@@ -321,6 +351,7 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 64 位 LC_SEGMENT_64 节点：与 32 位类似，但 vmaddr/vmsize/fileoff/filesize 为 64 位
 - (MVNode *)createLCSegment64Node:(MVNode *)parent
                         caption:(NSString *)caption
                        location:(uint64_t)location
@@ -332,6 +363,7 @@ using namespace std;
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取并显示 cmd
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -340,6 +372,7 @@ using namespace std;
 
   [node.details setAttributes:MVCellColorAttributeName,[NSColor greenColor],nil];
 
+  // 读取并显示 cmdsize
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -349,36 +382,42 @@ using namespace std;
   [node.details setAttributes:MVCellColorAttributeName,[NSColor greenColor],
                               MVUnderlineAttributeName,@"YES",nil];
   
+  // 读取 segname（16 字节）
   [dataController read_string:range fixlen:16 lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Segment Name"
                          :[NSString stringWithFormat:@"%s", string(segment_command_64->segname,16).c_str()]];
   
+  // 读取 vmaddr（8 字节）
   [dataController read_uint64:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"VM Address"
                          :[NSString stringWithFormat:@"%qu", segment_command_64->vmaddr]];
   
+  // 读取 vmsize（8 字节）
   [dataController read_uint64:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"VM Size"
                          :[NSString stringWithFormat:@"%qu", segment_command_64->vmsize]];
   
+  // 读取 fileoff（8 字节）
   [dataController read_uint64:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"File Offset"
                          :[NSString stringWithFormat:@"%qu", segment_command_64->fileoff]];
   
+  // 读取 filesize（8 字节）
   [dataController read_uint64:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"File Size"
                          :[NSString stringWithFormat:@"%qu", segment_command_64->filesize]];
   
+  // 读取 maxprot（4 字节）并解析
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -390,6 +429,7 @@ using namespace std;
   if (segment_command_64->maxprot & VM_PROT_WRITE)   [node.details appendRow:@"":@"":@"00000002":@"VM_PROT_WRITE"];
   if (segment_command_64->maxprot & VM_PROT_EXECUTE) [node.details appendRow:@"":@"":@"00000004":@"VM_PROT_EXECUTE"];
   
+  // 读取 initprot（4 字节）并解析
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -401,6 +441,7 @@ using namespace std;
   if (segment_command_64->initprot & VM_PROT_WRITE)  [node.details appendRow:@"":@"":@"00000002":@"VM_PROT_WRITE"];
   if (segment_command_64->initprot & VM_PROT_EXECUTE)[node.details appendRow:@"":@"":@"00000004":@"VM_PROT_EXECUTE"];
   
+  // 读取 nsects、flags 并解析 flags
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -433,53 +474,61 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 64 位 section 节点：解析 section_64（sectname/segname/addr/size/offset/align/reloff/nreloc/flags/reserved1/2/3）
 - (MVNode *)createSection64Node:(MVNode *)parent
                     caption:(NSString *)caption
                    location:(uint64_t)location
                  section_64:(struct section_64 const *)section_64
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:sizeof(struct section_64) saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:sizeof(struct section_64) saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 sectname（16 字节）
   [dataController read_string:range fixlen:16 lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Section Name"
                          :[NSString stringWithFormat:@"%s", string(section_64->sectname,16).c_str()]];
   
+  // 读取 segname（16 字节）
   [dataController read_string:range fixlen:16 lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Segment Name"
                          :[NSString stringWithFormat:@"%s", string(section_64->segname,16).c_str()]];
   
+  // 读取 addr（8 字节）
   [dataController read_uint64:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Address"
                          :[NSString stringWithFormat:@"%qu", section_64->addr]];
   
+  // 读取 size（8 字节）
   [dataController read_uint64:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Size"
                          :[NSString stringWithFormat:@"%qu", section_64->size]];
   
+  // 读取 offset（4 字节）
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Offset"
                          :[NSString stringWithFormat:@"%u", section_64->offset]];
   
+  // 读取 align（4 字节），显示为 2^align
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :@"Alignment"
                          :[NSString stringWithFormat:@"%u", (1 << section_64->align)]];
   
+  // 读取 reloff、nreloc
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -492,6 +541,7 @@ using namespace std;
                          :@"Number of Relocations"
                          :[NSString stringWithFormat:@"%u", section_64->nreloc]];
   
+  // 读取 flags，按 SECTION_TYPE 与属性位解析
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -536,6 +586,7 @@ using namespace std;
   if (section_64->flags & S_ATTR_EXT_RELOC)           [node.details appendRow:@"":@"":@"00000200":@"S_ATTR_EXT_RELOC"];
   if (section_64->flags & S_ATTR_LOC_RELOC)           [node.details appendRow:@"":@"":@"00000100":@"S_ATTR_LOC_RELOC"];
   
+  // reserved1：对符号指针/stub 类 section 表示间接符号表索引，否则为保留
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -545,12 +596,14 @@ using namespace std;
                           (section_64->flags & SECTION_TYPE) == S_NON_LAZY_SYMBOL_POINTERS ? @"Indirect Sym Index" : @"Reserved1"
                          :[NSString stringWithFormat:@"%u", section_64->reserved1]];
   
+  // reserved2：对 S_SYMBOL_STUBS 表示 stub 大小，否则为保留
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
                          :(section_64->flags & SECTION_TYPE) == S_SYMBOL_STUBS ? @"Size of Stubs" : @"Reserved2"
                          :[NSString stringWithFormat:@"%u", section_64->reserved2]];
 
+  // 64 位 section 独有：reserved3
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -560,17 +613,19 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_SYMTAB 节点：解析 symtab_command（symoff/nsyms/stroff/strsize），符号表与字符串表由 LinkEdit 分类展示
 - (MVNode *)createLCSymtabNode:(MVNode *)parent
                      caption:(NSString *)caption
                     location:(uint64_t)location
               symtab_command:(struct symtab_command const *)symtab_command
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:symtab_command->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:symtab_command->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd、cmdsize，再读取 symoff、nsyms、stroff、strsize
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -615,17 +670,19 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_DYSYMTAB 节点：解析动态符号表命令（本地/外部定义/未定义符号索引与数量，TOC、模块表、外部引用表、间接符号表、重定位表等偏移与条目数）
 - (MVNode *)createLCDysymtabNode:(MVNode *)parent
                        caption:(NSString *)caption
                       location:(uint64_t)location
               dysymtab_command:(struct dysymtab_command const *)dysymtab_command
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:dysymtab_command->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:dysymtab_command->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd、cmdsize，然后依次读取 ilocalsym、nlocalsym、iextdefsym、nextdefsym、iundefsym、nundefsym、tocoff、ntoc、modtaboff、nmodtab、extrefsymoff、nextrefsyms、indirectsymoff、nindirectsyms、extreloff、nextrel、locreloff、nlocrel
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -754,17 +811,19 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_TWOLEVEL_HINTS 节点：解析 twolevel_hints_command（offset、nhints），用于两级命名空间查找优化
 - (MVNode *)createLCTwolevelHintsNode:(MVNode *)parent
                             caption:(NSString *)caption
                            location:(uint64_t)location
              twolevel_hints_command:(struct twolevel_hints_command const *)twolevel_hints_command
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:twolevel_hints_command->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:twolevel_hints_command->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd、cmdsize、offset、nhints
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -797,17 +856,19 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_LOAD_DYLINKER/LC_ID_DYLINKER/LC_DYLD_ENVIRONMENT 节点：解析 dylinker_command（name.offset + 以 null 结尾的名称字符串）
 - (MVNode *)createLCDylinkerNode:(MVNode *)parent
                        caption:(NSString *)caption
                       location:(uint64_t)location
               dylinker_command:(struct dylinker_command const *)dylinker_command
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:dylinker_command->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:dylinker_command->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd、cmdsize、name.offset，再根据 offset 跳到名称处读取字符串
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -843,17 +904,19 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_PREBIND_CKSUM 节点：解析 prebind_cksum_command（cmd、cmdsize、cksum），用于预绑定校验
 - (MVNode *)createLCPrebindChksumNode:(MVNode *)parent
                               caption:(NSString *)caption
                              location:(uint64_t)location
                 prebind_cksum_command:(struct prebind_cksum_command const *)prebind_cksum_command
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:prebind_cksum_command->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:prebind_cksum_command->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd、cmdsize、cksum
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -879,19 +942,20 @@ using namespace std;
   return node;
 }
 
-  
 //-----------------------------------------------------------------------------
+// 创建 LC_UUID 节点：解析 uuid_command（cmd、cmdsize、16 字节 UUID），将 UUID 格式化为 8-4-4-4-12 显示
 - (MVNode *)createLCUUIDNode:(MVNode *)parent
                    caption:(NSString *)caption
                   location:(uint64_t)location
               uuid_command:(struct uuid_command const *)uuid_command
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:uuid_command->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:uuid_command->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd 并显示
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -900,6 +964,7 @@ using namespace std;
   
   [node.details setAttributes:MVCellColorAttributeName,[NSColor greenColor],nil];
 
+  // 读取 cmdsize
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -909,6 +974,7 @@ using namespace std;
   [node.details setAttributes:MVCellColorAttributeName,[NSColor greenColor],
                               MVUnderlineAttributeName,@"YES",nil];
   
+  // 读取 16 字节 UUID，按标准格式分段显示
   [dataController read_bytes:range length:16 lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -923,6 +989,7 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_THREAD/LC_UNIXTHREAD 节点：根据 cputype 解析 x86/x64 或 ARM 线程状态（flavor、count、寄存器），并设置 entryPoint
 - (MVNode *)createLCThreadNode:(MVNode *)parent
                      caption:(NSString *)caption
                     location:(uint64_t)location
@@ -934,6 +1001,7 @@ using namespace std;
     NSRange range = NSMakeRange(location,0);
     NSString * lastReadHex;
 
+    // 读取 cmd、cmdsize，再根据架构解析线程状态（x86 含 eip/rip，ARM 含 pc）
     [dataController read_uint32:range lastReadHex:&lastReadHex];
     [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                            :lastReadHex
@@ -1140,17 +1208,19 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_LOAD_DYLIB/LC_ID_DYLIB/LC_LOAD_WEAK_DYLIB 等节点：解析 dylib_command（name.offset、timestamp、current_version、compatibility_version、名称字符串）
 - (MVNode *)createLCDylibNode:(MVNode *)parent
                     caption:(NSString *)caption
                    location:(uint64_t)location
               dylib_command:(struct dylib_command const *)dylib_command
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:dylib_command->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:dylib_command->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd、cmdsize、dylib.name.offset、timestamp、current_version、compatibility_version，再根据 offset 读名称
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -1211,17 +1281,19 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_CODE_SIGNATURE/LC_FUNCTION_STARTS/LC_DATA_IN_CODE 等 linkedit 数据节点：解析 dataoff、datasize，具体内容由 LinkEdit 等按类型展示
 - (MVNode *)createLCLinkeditDataNode:(MVNode *)parent
                            caption:(NSString *)caption
                           location:(uint64_t)location
              linkedit_data_command:(struct linkedit_data_command const *)linkedit_data_command
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:linkedit_data_command->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:linkedit_data_command->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd、cmdsize、dataoff、datasize
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -1254,17 +1326,19 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_ROUTINES 节点（32 位）：解析 init_address、init_module、reserved1～6
 - (MVNode *)createLCRoutinesNode:(MVNode *)parent
                          caption:(NSString *)caption
                         location:(uint64_t)location
                 routines_command:(struct routines_command const *)routines_command
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:routines_command->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:routines_command->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd、cmdsize 及 init_address、init_module、reserved1～6
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -1333,17 +1407,19 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 创建 LC_ROUTINES_64 节点：64 位版本，init_address、init_module、reserved1～6 均为 64 位
 - (MVNode *)createLCRoutines64Node:(MVNode *)parent
                            caption:(NSString *)caption
                           location:(uint64_t)location
                routines_command_64:(struct routines_command_64 const *)routines_command_64
 {
   MVNodeSaver nodeSaver;
-  MVNode * node = [parent insertChildWithDetails:caption location:location length:routines_command_64->cmdsize saver:nodeSaver]; 
+  MVNode * node = [parent insertChildWithDetails:caption location:location length:routines_command_64->cmdsize saver:nodeSaver];
   
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
+  // 读取 cmd、cmdsize 及 64 位 init_address、init_module、reserved1～6
   [dataController read_uint32:range lastReadHex:&lastReadHex];
   [node.details appendRow:[NSString stringWithFormat:@"%.8lX", range.location]
                          :lastReadHex
@@ -2212,6 +2288,7 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 根据 command 类型创建对应 Load Command 详情节点：LC_SEGMENT/LC_SEGMENT_64 会同时填充 segment(section) 容器并建子节点，LC_SYMTAB 会填充 symbols/symbols_64 与 strtab，其余仅建节点
 -(MVNode *)createLoadCommandNode:(MVNode *)parent
                          caption:(NSString *)caption
                         location:(uint64_t)location
@@ -2222,6 +2299,7 @@ using namespace std;
   
   switch (command)
   {
+    // 32 位段：创建段节点并遍历 nsects 创建 section 子节点，记录 segmentInfo/segments/sectionInfo/sections
     case LC_SEGMENT:
     {
       MATCH_STRUCT(segment_command,location)
@@ -2256,7 +2334,8 @@ using namespace std;
         sections.push_back(section);
       }
     } break;
-      
+  
+    // 64 位段：同 LC_SEGMENT，使用 segment_command_64/section_64 与 segments_64/sections_64
     case LC_SEGMENT_64:
     {
       MATCH_STRUCT(segment_command_64,location)
@@ -2292,7 +2371,8 @@ using namespace std;
         sections_64.push_back(section_64);
       }
     } break;
-      
+  
+    // 符号表：创建 LC_SYMTAB 节点并缓存 strtab，将各 nlist/nlist_64 加入 symbols/symbols_64
     case LC_SYMTAB:
     {
       MATCH_STRUCT(symtab_command,location)
@@ -2319,7 +2399,8 @@ using namespace std;
         
       }
     } break;
-      
+  
+    // 动态符号表：仅创建 LCDysymtab 节点，LinkEdit 用其字段创建子节点
     case LC_DYSYMTAB:
     {
       MATCH_STRUCT(dysymtab_command,location)
@@ -2328,7 +2409,8 @@ using namespace std;
                                location:location
                        dysymtab_command:dysymtab_command];
     } break;
-      
+  
+    // 两级 Hints
     case LC_TWOLEVEL_HINTS:
     {
       MATCH_STRUCT(twolevel_hints_command,location)
@@ -2337,7 +2419,8 @@ using namespace std;
                                     location:location
                       twolevel_hints_command:twolevel_hints_command];
     } break;
-      
+  
+    // 动态链接器：ID、加载、环境
     case LC_ID_DYLINKER:
     case LC_LOAD_DYLINKER:
     case LC_DYLD_ENVIRONMENT:
@@ -2568,8 +2651,9 @@ using namespace std;
           break;
       }
 #endif
+    // 未支持的 Load Command：创建通用数据节点并标注 "(unsupported)"
       default:
-      [self createDataNode:parent 
+      [self createDataNode:parent
                    caption:[NSString stringWithFormat:@"%@ (unsupported)", caption]
                   location:location
                     length:length];
