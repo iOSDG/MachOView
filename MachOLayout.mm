@@ -6,50 +6,73 @@
  *
  */
 
+// 公共宏与全局变量
 #import "Common.h"
+// Mach-O 布局头与类型定义
 #import "MachOLayout.h"
+// 数据控制器与 MVNode
 #import "DataController.h"
+// 按 NSRange 读写整数/字节
 #import "ReadWrite.h"
+// Load Command 解析与节点创建（Category）
 #import "LoadCommands.h"
+// 符号表、重定位等 LinkEdit 解析（Category）
 #import "LinkEdit.h"
+// Dyld 绑定/导出等解析（Category）
 #import "DyldInfo.h"
+// 异常 CFI/LSDA 解析（Category）
 #import "Exceptions.h"
+// 节内容（C 串、字面量、反汇编等）解析（Category）
 #import "SectionContents.h"
+// Objective-C 节解析（Category）
 #import "ObjC.h"
+// C++ 运行时足迹等（Category）
 #import "CRTFootPrints.h"
+// mach_header、load_command、segment_command 等
 #import <mach-o/loader.h>
+// nlist、nlist_64
 #import <mach-o/nlist.h>
+// relocation_info
 #import <mach-o/reloc.h>
 
 using namespace std;
 
 //============================================================================
+// MachOLayout 实现：Mach-O 头、Load Commands、段节、符号表、重定位、Dyld、节内容、异常、ObjC 等
+//============================================================================
 @implementation MachOLayout
 
 //-----------------------------------------------------------------------------
+// 指定初始化：先调父类，再初始化 RVA->符号名字典
 - (instancetype)initWithDataController:(MVDataController *)dc rootNode:(MVNode *)node
 {
+  // 父类完成 dataController、rootNode、imageOffset、imageSize、backgroundThread、archiver
   if (self = [super initWithDataController:dc rootNode:node])
   {
+    // 用于 findSymbolAtRVA，由 LinkEdit/Dyld 等解析时填充
     symbolNames = [[NSMutableDictionary alloc] init];
   }
   return self;
 }
 
 //-----------------------------------------------------------------------------
+// 工厂方法：alloc + initWithDataController:rootNode:
 + (MachOLayout *)layoutWithDataController:(MVDataController *)dc rootNode:(MVNode *)node
 {
   return [[MachOLayout alloc] initWithDataController:dc rootNode:node];
 }
 
 //-----------------------------------------------------------------------------
+// 是否 64 位：根据 mach_header 的 cputype 是否带 CPU_ARCH_ABI64
 - (BOOL)is64bit
 {
+  // 从镜像起始取 mach_header（32 位镜像）
   MATCH_STRUCT(mach_header,imageOffset);
   return ((mach_header->cputype & CPU_ARCH_ABI64) == CPU_ARCH_ABI64);
 }
 
 //-----------------------------------------------------------------------------
+// 是否为 dylib stub：文件类型为 MH_DYLIB_STUB
 - (BOOL)isDylibStub
 {
   MATCH_STRUCT(mach_header,imageOffset);
@@ -57,13 +80,16 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 按索引取 32 位 section，越界返回静态“未找到”结构
 - (struct section const *)getSectionByIndex:(uint32_t)index
 {
+  // 占位用，索引 0 为 NULL，越界也返回类似占位
   static const struct section notfound = { "???", "?????", 0, 0, 0, 0, 0, 0, 0, 0, 0 };
   return (index < sections.size() ? sections.at(index) : &notfound);
 }
 
 //-----------------------------------------------------------------------------
+// 按索引取 64 位 section
 - (struct section_64 const *)getSection64ByIndex:(uint32_t)index
 {
   static const struct section_64 notfound = { "???", "?????", 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -71,6 +97,7 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 按索引取 32 位符号表条目
 - (struct nlist const *)getSymbolByIndex:(uint32_t)index
 {
   static const struct nlist notfound = { 0, 0, 0, 0, 0 }; 
@@ -78,6 +105,7 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 按索引取 64 位符号表条目
 - (struct nlist_64 const *)getSymbol64ByIndex:(uint32_t)index
 {
   static const struct nlist_64 notfound = { 0, 0, 0, 0, 0 }; 
@@ -85,6 +113,7 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 按索引取 dylib，越界返回静态占位
 - (struct dylib const *)getDylibByIndex:(uint32_t)index
 {
   static const struct dylib notfound = { 0, 0, 0, 0 }; 
@@ -92,21 +121,25 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 根据 RVA 查符号名：先查 symbolNames 字典，无则返回十六进制地址字符串
 - (NSString *)findSymbolAtRVA:(uint64_t)rva
 {
+  // 用 NSNumber 包装 rva 作为 key
   NSString * symbolName = [symbolNames objectForKey:[NSNumber numberWithUnsignedLongLong:rva]];
   return (symbolName != nil ? symbolName : [NSString stringWithFormat:@"0x%qX",rva]);
 }
 
 //-----------------------------------------------------------------------------
+// 按节名与可选段名查找 32 位 section；从第二个元素开始（第一个为占位 NULL）
 -(struct section const *)findSectionByName:(char const *)sectname 
                                 andSegment:(char const *)segname
 {
-    
+  // 跳过 sections[0] 占位
   for (SectionVector::const_iterator sectIter = ++sections.begin(); 
        sectIter != sections.end(); ++sectIter)
   {
     struct section const * section = *sectIter;
+    // 段名可选；节名必须匹配，比较长度 16
     if ((segname == NULL || strncmp(section->segname,segname,16) == 0) && 
         strncmp(section->sectname,sectname,16) == 0)
     {
@@ -117,10 +150,10 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
+// 按节名与可选段名查找 64 位 section
 -(struct section_64 const *)findSection64ByName:(char const *)sectname 
                                      andSegment:(char const *)segname
 {
-  
   for (Section64Vector::const_iterator sectIter = ++sections_64.begin(); 
        sectIter != sections_64.end(); ++sectIter)
   {
@@ -135,9 +168,10 @@ using namespace std;
 }
 
 //-----------------------------------------------------------------------------
-// convert a file offset to the virtual address
+// 将文件偏移转为虚拟地址：用 segmentInfo（fileOffset -> address,size）找到包含该偏移的段再换算
 - (uint64_t)fileOffsetToRVA: (uint64_t)offset
 {
+    // upper_bound 找第一个 first > offset，前一个即为包含 offset 的段
     SegmentInfoMap::const_iterator segIter = segmentInfo.upper_bound(offset);
     if (segIter == segmentInfo.begin()) {
         [NSException raise:@"fileOffsetToRVA"
@@ -151,6 +185,7 @@ using namespace std;
 }
 
 // ----------------------------------------------------------------------------
+// 将虚拟地址转为文件偏移：用 sectionInfo（address -> fileOffset, userInfo）找到包含 rva 的节
 - (uint64_t)RVAToFileOffset: (uint64_t)rva
 {
     SectionInfoMap::const_iterator sectIter = sectionInfo.upper_bound(rva);
@@ -160,12 +195,14 @@ using namespace std;
     }
     --sectIter;
     uint64_t sectOffset = sectIter->second.first;
+    // 节内偏移 + 节文件偏移
     uint64_t fileOffset = sectOffset + (rva - [self fileOffsetToRVA:sectOffset]);
     NSAssert1(fileOffset < [dataController.fileData length], @"rva is out of range (0x%llX)", rva);
     return fileOffset;
 }
 
 // ----------------------------------------------------------------------------
+// 在指定文件偏移处写入重定位值，直接修改 realData（用于 UI 重定位编辑等）
 - (void)addRelocAtFileOffset:(uint64_t)offset withLength:(uint64_t)length andValue:(uint64_t)value
 {
   [dataController.realData replaceBytesInRange:NSMakeRange(offset,length) withBytes:&value];
@@ -173,8 +210,10 @@ using namespace std;
 
 // ----------------------------------------------------------------------------
 
+// 关闭“初始化覆盖”警告，因下面用 [0..255]=-1 再部分覆盖
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Winitializer-overrides"
+// 十六进制字符转数值表：非法字符为 -1，'0'-'9' 为 0-9，'A'-'F'/'a'-'f' 为 10-15
 static const long hextable[] =
 {
   [0 ... 255] = -1, // bit aligned access into this table is considerably
@@ -203,12 +242,14 @@ long hexdec(const char *hex) {
 }
 
 // ----------------------------------------------------------------------------
-// RAW string to RVA string converter for data source
+// 数据源用：将界面中的“文件偏移”十六进制字符串转为 RVA 字符串显示
 - (NSString *)convertToRVA: (NSString *)offsetStr
 {
+    // 先按十六进制解析为文件偏移
     uint64_t fileOffset = hexdec(CSTRING(offsetStr));
     NSParameterAssert((long)fileOffset != -1);
   
+    // 若无段信息或偏移不在任意段内，返回空串
     if (segmentInfo.empty() ||
         fileOffset < segmentInfo.begin()->first ||
         fileOffset + 1 >= (--segmentInfo.end())->first + (--segmentInfo.end())->second.second)
@@ -220,6 +261,7 @@ long hexdec(const char *hex) {
 }
 
 // ----------------------------------------------------------------------------
+// 为 32 位 section 生成 userInfo：layout、segname、sectname、address，供 findNodeByUserInfo 查找节点
 - (NSDictionary *)userInfoForSection:(struct section const *)section
 {
   if (section == NULL) return nil;
@@ -233,6 +275,7 @@ long hexdec(const char *hex) {
 }
 
 //-----------------------------------------------------------------------------
+// 为 64 位 section 生成 userInfo
 - (NSDictionary *)userInfoForSection64:(struct section_64 const *)section_64
 {
   if (section_64 == NULL) return nil;
@@ -246,6 +289,7 @@ long hexdec(const char *hex) {
 }
 
 //-----------------------------------------------------------------------------
+// 重定位节点用 userInfo：layout + 固定 key "Relocations"
 - (NSDictionary *)userInfoForRelocs
 {
   typeof(self) __weak weakSelf = self;
@@ -256,6 +300,7 @@ long hexdec(const char *hex) {
 }
 
 //-----------------------------------------------------------------------------
+// 根据 RVA 在 sectionInfo 中查 section 的 userInfo（segname、sectname、address 等）
 - (NSDictionary *)sectionInfoForRVA:(uint64_t)rva
 {
     SectionInfoMap::iterator iter = sectionInfo.upper_bound(rva);
@@ -267,6 +312,7 @@ long hexdec(const char *hex) {
 }
 
 //-----------------------------------------------------------------------------
+// 根据 RVA 返回 "segname sectname" 字符串，无节则返回 "NO SECTION..."
 - (NSString *)findSectionContainsRVA:(uint64_t)rva
 {
     NSDictionary * userInfo = [self sectionInfoForRVA:rva];
@@ -276,6 +322,7 @@ long hexdec(const char *hex) {
 }
 
 //------------------------------------------------------------------------------
+// 根据 RVA 找到包含该地址的 section 对应的树节点
 - (MVNode *)sectionNodeContainsRVA:(uint64_t)rva
 {
     NSDictionary * userInfo = [self sectionInfoForRVA:rva];
@@ -283,9 +330,10 @@ long hexdec(const char *hex) {
 }
 
 //-----------------------------------------------------------------------------
+// 32 位：解析 __LINKEDIT 相关 Load Command，创建符号表、字符串表、DYSYMTAB、Two Level Hints、Segment Split、Code Signature、Function Starts、Data in Code 等节点
 -(void) processLinkEdit
 {
-  // find related load commands
+  // 待识别的 Load Command 指针，遍历 commands 时赋值
   struct symtab_command const * symtab_command = NULL;
   struct dysymtab_command const * dysymtab_command = NULL;
   struct twolevel_hints_command const * twolevel_hints_command = NULL;
@@ -296,8 +344,11 @@ long hexdec(const char *hex) {
   
   MATCH_STRUCT(mach_header,imageOffset);
   
+  // 第一个有文件内容的段的 vmaddr（用于 Split Segment / Function Starts 等）
   uint32_t base_addr;
+  // 所有段中最小 vmaddr
   uint32_t seg1addr = (uint32_t)-1;
+  // MH_SPLIT_SEGS 时第一个可写段的 vmaddr，用于重定位基址
   uint32_t segs_read_write_addr = (uint32_t)-1;
 
   for (CommandVector::const_iterator cmdIter = commands.begin(); cmdIter != commands.end(); ++cmdIter)
@@ -598,9 +649,9 @@ long hexdec(const char *hex) {
 }
 
 //-----------------------------------------------------------------------------
+// 64 位：解析 __LINKEDIT，创建符号表、字符串表、DYSYMTAB、Two Level Hints、Segment Split、Code Signature、Function Starts、Data in Code 等节点（与 processLinkEdit 对称，使用 nlist_64/dylib_module_64）
 -(void) processLinkEdit64
 {
-  // find related load commands
   struct symtab_command const * symtab_command = NULL;
   struct dysymtab_command const * dysymtab_command = NULL;
   struct twolevel_hints_command const * twolevel_hints_command = NULL;
@@ -913,11 +964,11 @@ long hexdec(const char *hex) {
 }
 
 //-----------------------------------------------------------------------------
+// 解析 LC_DYLD_INFO/LC_DYLD_INFO_ONLY：创建 Dynamic Loader Info 节点，并解析 Rebase、Binding、Weak Bind、Lazy Bind、Export 子节点
 -(void)processDyldInfo
 {
   uint64_t base_addr = 0;
   
-  // find related load commands
   struct dyld_info_command const * dyld_info_command = NULL;
   
   for (CommandVector::const_iterator cmdIter = commands.begin(); cmdIter != commands.end(); ++cmdIter)
@@ -1048,6 +1099,7 @@ long hexdec(const char *hex) {
 }
 
 //-----------------------------------------------------------------------------
+// 节名/段名比较仿函数：用于 find_if 查找指定 segname+sectname 或仅 sectname 的 section
 template <typename SectionT>
 struct CompareSectionByName
 {
@@ -1074,11 +1126,11 @@ struct CompareSectionByName
 };
 
 //-----------------------------------------------------------------------------
+// 32 位：按 section 类型创建字面量节（C 串、4/8/16 字节浮点）与指针/桩节（Literal Pointers、Lazy/Non-Lazy Symbol Pointers、Symbol Stubs 等）子节点
 -(void)processSections
 {
   NSString * lastNodeCaption;
   
-  //================ sections with literal content ============================
   for (SectionVector::const_iterator sectIter = ++sections.begin(); sectIter != sections.end(); ++sectIter)
   {
     struct section const * section = *sectIter;
@@ -1195,11 +1247,11 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 64 位：与 processSections 对称，处理 sections_64 的字面量节与指针/桩节
 -(void)processSections64
 {
   NSString * lastNodeCaption;
 
-  //================ sections with literal content ============================
   for (Section64Vector::const_iterator sectIter = ++sections_64.begin(); sectIter != sections_64.end(); ++sectIter)
   {
     struct section_64 const * section_64 = *sectIter;
@@ -1316,9 +1368,9 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 32 位：解析 __eh_frame 节中的 CFI 记录，为每个 FDE 创建 Call Frame 子节点
 -(void)processEHFrames
 {
-  // dylib stubs have no section
   if ([self isDylibStub] == YES)
   {
     return;
@@ -1373,9 +1425,9 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 64 位：解析 __eh_frame 节中的 CFI 记录
 -(void)processEHFrames64
 {
-  // dylib stubs have no section
   if ([self isDylibStub] == YES)
   {
     return;
@@ -1430,9 +1482,9 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 32 位：解析 __gcc_except_tab 节，根据 lsdaInfo（LSDA 地址 -> FDE 地址）为每个 LSDA 创建子节点
 -(void)processLSDA
 {
-  // dylib stubs have no section
   if ([self isDylibStub] == YES)
   {
     return;
@@ -1481,9 +1533,9 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 64 位：解析 __gcc_except_tab 节中的 LSDA
 -(void)processLSDA64
 {
-  // dylib stubs have no section
   if ([self isDylibStub] == YES)
   {
     return;
@@ -1532,6 +1584,7 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 32 位：解析 Objective-C 相关节（__OBJC/__OBJC2/__DATA：module_info、class_list、category_list、protocol、message_refs、image_info、cfstring 等），并解析类/分类/协议指针
 -(void)processObjcSections
 {
     PointerVector objcClassPointers;
@@ -1547,7 +1600,6 @@ struct CompareSectionByName
     
     @try
     {
-        // first Objective-C ABI
         section = [self findSectionByName:"__module_info" andSegment:"__OBJC"];
         if ((sectionNode = [self findNodeByUserInfo:[self userInfoForSection:section]])) {
             hasObjCModules = true;
@@ -1696,6 +1748,7 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 64 位：解析 Objective-C 相关节（class_list、category_list、protocol、message_refs、image_info、cfstring 等）
 -(void)processObjcSections64
 {
     Pointer64Vector objcClassPointers;
@@ -1838,9 +1891,9 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 32 位：为标记为 S_ATTR_PURE_INSTRUCTIONS 且非 S_SYMBOL_STUBS 的 section 创建反汇编（Assembly）子节点
 - (void)processCodeSections
 {
-  // find related load commands
   struct dysymtab_command const * dysymtab_command = NULL;
   for (CommandVector::const_iterator cmdIter = commands.begin(); cmdIter != commands.end(); ++cmdIter)
   {
@@ -1888,9 +1941,9 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 64 位：为纯指令节创建反汇编子节点
 - (void)processCodeSections64
 {
-  // find related load commands
   struct dysymtab_command const * dysymtab_command = NULL;
   for (CommandVector::const_iterator cmdIter = commands.begin(); cmdIter != commands.end(); ++cmdIter)
   {
@@ -1938,9 +1991,9 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 32 位：在“Relocations”节点下为每个有 nreloc 的 section 创建 (segname,sectname) 重定位子节点
 - (void)processSectionRelocs
 {
-  // find Relocations node
   MVNode * relocsNode = [self findNodeByUserInfo:[self userInfoForRelocs]];
   if (relocsNode == nil)
   {
@@ -1972,9 +2025,9 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 64 位：在 Relocations 节点下为每个 section_64 创建重定位子节点
 - (void)processSectionRelocs64
 {
-  // find Relocations node
   MVNode * relocsNode = [self findNodeByUserInfo:[self userInfoForRelocs]];
   if (relocsNode == nil)
   {
@@ -2006,6 +2059,7 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 创建 32 位 Mach-O 头节点：解析 magic、cputype、cpusubtype、filetype、ncmds、sizeofcmds、flags 并写入详情表
 - (MVNode *)createMachONode:(MVNode *)parent
                     caption:(NSString *)caption
                    location:(uint64_t)location
@@ -2014,6 +2068,7 @@ struct CompareSectionByName
   MVNodeSaver nodeSaver;
   MVNode * node = [parent insertChildWithDetails:caption location:location length:sizeof(struct mach_header) saver:nodeSaver]; 
   
+  // 从 location 起按字段顺序读取并追加详情行
   NSRange range = NSMakeRange(location,0);
   NSString * lastReadHex;
   
@@ -2142,7 +2197,7 @@ struct CompareSectionByName
   return node;
 }
 //-----------------------------------------------------------------------------
-
+// 创建 64 位 Mach-O 头节点：解析 magic、cputype、cpusubtype、filetype、ncmds、sizeofcmds、flags、reserved
 - (MVNode *)createMachO64Node:(MVNode *)parent
                       caption:(NSString *)caption
                      location:(uint64_t)location
@@ -2275,21 +2330,19 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 主线程任务：创建 Mach Header、Load Commands、Sections、Relocations 节点，填充 segmentInfo/sectionInfo，并确定运行时版本
 - (void)doMainTasks
 {
   uint32_t      ncmds;        // number of load commands
   uint32_t      sizeofcmds;   // the size of all the load commands
   
-  // zero section (used to indicate absolute section relocations)
   sections.push_back(NULL); 
   sections_64.push_back(NULL); 
   
-  // zero dylib (self)
   dylibs.push_back((struct dylib *)NULL);
   
   NSString * lastNodeCaption; // for error message
   
-  // ============== Mach Header ===========
   if ([self is64bit] == NO)
   {
     MATCH_STRUCT(mach_header,imageOffset)
@@ -2328,7 +2381,6 @@ struct CompareSectionByName
   }
   
   
-  //=========== Load Commands =============
   {
     uint64_t fileOffset = imageOffset + ([self is64bit] == NO
                                          ? sizeof(struct mach_header) 
@@ -2343,7 +2395,6 @@ struct CompareSectionByName
     {
       MATCH_STRUCT(load_command,fileOffset)
       
-      // store the command for post-processing
       commands.push_back(load_command);
       
       @try
@@ -2448,6 +2499,7 @@ struct CompareSectionByName
 }
 
 //-----------------------------------------------------------------------------
+// 后台任务：用 NSOperation 队列按依赖顺序执行 LinkEdit、Sections、SectionRelocs、DyldInfo、EHFrames、LSDA、ObjC、CodeSections，最后调用父类并更新状态
 - (void)doBackgroundTasks
 {
   NSBlockOperation * linkEditOperation = [NSBlockOperation blockOperationWithBlock:^
@@ -2523,7 +2575,6 @@ struct CompareSectionByName
     NSLog(@"%@: Code sections finished parsing.", self);
   }];
   
-  // setup dependencies
   [sectionOperation       addDependency:linkEditOperation];
   [sectionRelocsOperation addDependency:sectionOperation];
   [dyldInfoOperation      addDependency:sectionRelocsOperation];
@@ -2532,10 +2583,8 @@ struct CompareSectionByName
   [EHFramesOperation      addDependency:dyldInfoOperation];
   [LSDAsOperation         addDependency:EHFramesOperation];
     
-  // setup priorities
   [codeSectionsOperation  setQueuePriority:NSOperationQueuePriorityLow];
   
-  // start operations
   NSOperationQueue * oq = [[NSOperationQueue alloc] init];
 
   [dataController updateStatus:MVStatusTaskStarted];
