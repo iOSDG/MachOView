@@ -1,9 +1,13 @@
 //
 // Prefix header for all source files of the 'MachOView' target in the 'MachOView' project
 //
+// 预编译头：被 Xcode 在编译每个 .m/.mm 前自动包含，用于统一引入 Cocoa 与原子操作头，减少重复解析、加快编译。
+//
 
 #ifdef __OBJC__
+    // Objective-C/Cocoa 源文件中引入 Cocoa 框架（Foundation + AppKit），提供 NS* 类与 macOS UI API
     #import <Cocoa/Cocoa.h>
 #endif
 
+// 引入原子操作（如 OSAtomic*），用于无锁计数等；部分代码可能用于 nrow_loaded/nrow_total 等跨线程统计
 #include <libkern/OSAtomic.h>
