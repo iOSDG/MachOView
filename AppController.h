@@ -8,22 +8,24 @@
  *  以及打开面板的文件类型过滤（仅允许 Mach-O / Fat / Archive）。
  */
 
-// 引入 Cocoa 框架（含 NSApplication、NSObject、NSOpenSavePanelDelegate 等）
+// 导入Cocoa框架头文件，提供MacOS应用开发核心类库支持
 #import <Cocoa/Cocoa.h>
 
-// 前向声明偏好设置窗口控制器，避免在头文件中 #import 其实现
+// 前向声明MVPreferenceController类，避免在头文件中引入实现细节，减少编译依赖
 @class MVPreferenceController;
 
-// 应用委托类：实现 NSApplicationDelegate 与 NSOpenSavePanelDelegate（用于打开面板中过滤可选文件）
+// 定义MVAppController类接口，继承NSObject，遵循NSApplicationDelegate和NSOpenSavePanelDelegate协议，负责应用生命周期管理和文件打开面板逻辑
 @interface MVAppController : NSObject <NSApplicationDelegate,NSOpenSavePanelDelegate>
 {
-  // 偏好设置窗口控制器，懒创建，用于显示偏好面板
+  // 声明实例变量preferenceController，用于懒加载和管理偏好设置窗口的显示与交互
   MVPreferenceController * preferenceController;
 }
 
-// 菜单动作：显示偏好设置面板（对应菜单项的 IBAction）
+
+// 声明IBAction方法showPreferencePanel，响应菜单点击事件以显示偏好设置面板
 - (IBAction)showPreferencePanel:(id)sender;
-// 菜单动作：附加到指定 PID 的进程并读取其主二进制 Mach-O 头，再以临时文件方式用文档打开
+
+// 声明IBAction方法attach，响应菜单点击事件以附加到外部进程进行Mach-O动态分析
 - (IBAction)attach:(id)sender;
 
 @end
