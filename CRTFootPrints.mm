@@ -6,20 +6,29 @@
  *
  */
 
+// 引入C++标准库string
 #include <string>
+// 引入C++标准库vector
 #include <vector>
+// 引入C++标准库set
 #include <set>
+// 引入C++标准库map
 #include <map>
 
+// 引入CRTFootPrints头文件
 #import "CRTFootPrints.h"
+// 引入DataController头文件
 #import "DataController.h"
+// 引入Mach-O加载命令定义头文件
 #import <mach-o/loader.h>
 
+// 宏定义：MATCHASM用于简化指纹匹配的调用，检查剩余数据长度是否足够，并调用matchAsmAtOffset
 #define MATCHASM(_pattern) \
   (offset + sizeof(_pattern) < dataLength && \
   [self matchAsmAtOffset:offset asmFootPrint:_pattern lineCount:sizeof(_pattern)/FOOTPRINT_STRIDE])
 
 
+// 使用标准命名空间
 using namespace std;
 
 //**********************************************************************
@@ -30,6 +39,7 @@ using namespace std;
 // SDK:10.4 DeployTarget:10.4
 // MacOSX10.4u.sdk/usr/lib/crt1.o
 //==================================
+// 定义静态常量数组SDK104Target104X86v1，存储SDK 10.4的目标10.4 X86机器码指纹版本1
 static AsmFootPrint const SDK104Target104X86v1 =
 {
   //start:
@@ -179,6 +189,7 @@ static AsmFootPrint const SDK104Target104X86v1 =
 };  
 
 
+// 定义静态常量数组SDK104Target104X86v2，存储SDK 10.4的目标10.4 X86机器码指纹版本2
 static AsmFootPrint const SDK104Target104X86v2 =
 {
   //start:
@@ -295,6 +306,7 @@ static AsmFootPrint const SDK104Target104X86v2 =
   {1, 0xE8}, GAP(4),                        // call    _exit
 };
 
+// 定义静态常量数组SDK104Target104X86v3，存储SDK 10.4的目标10.4 X86机器码指纹版本3
 static AsmFootPrint const SDK104Target104X86v3 =
 {
   //start:
@@ -408,6 +420,7 @@ static AsmFootPrint const SDK104Target104X86v3 =
   {1, 0xE8}, GAP(4),                        // call    _exit
 };
 
+// 定义静态常量数组SDK104Target104X86v4，存储SDK 10.4的目标10.4 X86机器码指纹版本4
 static AsmFootPrint const SDK104Target104X86v4 =
 {
   //start:
@@ -521,6 +534,7 @@ static AsmFootPrint const SDK104Target104X86v4 =
   {1, 0xE8}, GAP(4),                        // call    _exit
 };
 
+// 定义静态常量数组SDK104Target104X86_64，存储SDK 10.4的目标10.4 X86_64机器码指纹
 static AsmFootPrint const SDK104Target104X86_64 =
 {
   //start:
@@ -635,6 +649,7 @@ static AsmFootPrint const SDK104Target104X86_64 =
 // SDK:10.5 DeployTarget:10.4
 // MacOSX10.5.sdk/usr/lib/crt1.o
 //==================================
+// 定义静态常量数组SDK105Target104X86，存储SDK 10.5的目标10.4 X86机器码指纹
 static AsmFootPrint const SDK105Target104X86 =
 {
   //start:
@@ -741,6 +756,7 @@ static AsmFootPrint const SDK105Target104X86 =
   {1, 0xE8}, GAP(4),                        // call    near ptr _exit
 };
 
+// 定义静态常量数组SDK105Target104X86_64，存储SDK 10.5的目标10.4 X86_64机器码指纹
 static AsmFootPrint const SDK105Target104X86_64 =
 {
   //start:
@@ -841,219 +857,11 @@ static AsmFootPrint const SDK105Target104X86_64 =
 };
 
 
-
-//==================================
-// SDK:10.6 DeployTarget:10.4
-// MacOSX10.6.sdk/usr/lib/crt1.o
-//==================================
-static AsmFootPrint const SDK106Target104X86 =
-{
-  //start:
-  {2, 0x6A, 0x00},                          // push    0
-  {2, 0x89, 0xE5},                          // mov     ebp, esp
-  {3, 0x83, 0xE4, 0xF0},                    // and     esp, 0FFFFFFF0h
-  {3, 0x83, 0xEC, 0x10},                    // sub     esp, 10h
-  {3, 0x8B, 0x5D, 0x04},                    // mov     ebx, [ebp+4]
-  {3, 0x89, 0x1C, 0x24},                    // mov     [esp+14h+var_14], ebx
-  {3, 0x8D, 0x4D, 0x08},                    // lea     ecx, [ebp+8]
-  {4, 0x89, 0x4C, 0x24, 0x04},              // mov     [esp+14h+var_10], ecx
-  {3, 0x83, 0xC3, 0x01},                    // add     ebx, 1
-  {3, 0xC1, 0xE3, 0x02},                    // shl     ebx, 2
-  {2, 0x01, 0xCB},                          // add     ebx, ecx
-  {4, 0x89, 0x5C, 0x24, 0x08},              // mov     [esp+14h+var_C], ebx
-  {5, 0xE8, 0x01, 0x00, 0x00, 0x00},        // call    __start
-  {1, 0xF4},                                // hlt
-  
-  //__start:
-  {1, 0x55},                                // push    ebp
-  {2, 0x89, 0xE5},                          // mov     ebp, esp
-  {1, 0x57},                                // push    edi
-  {1, 0x56},                                // push    esi
-  {1, 0x53},                                // push    ebx
-  {3, 0x83, 0xEC, 0x2C},                    // sub     esp, 2Ch
-  {3, 0x8B, 0x7D, 0x0C},                    // mov     edi, [ebp+arg_4]
-  {3, 0x8B, 0x75, 0x10},                    // mov     esi, [ebp+arg_8]
-  {3, 0x8B, 0x45, 0x08},                    // mov     eax, [ebp+arg_0]
-  {1, 0xA3}, GAP(4),                        // mov     ds:_NXArgc, eax
-  {2, 0x89, 0x3D}, GAP(4),                  // mov     ds:_NXArgv, edi
-  {2, 0x89, 0x35}, GAP(4),                  // mov     ds:_environ, esi
-  {2, 0x8B, 0x0F},                          // mov     ecx, [edi]
-  {3, 0x8D, 0x51, 0x01},                    // lea     edx, [ecx+1]
-  {2, 0x85, 0xC9},                          // test    ecx, ecx
-  {2, 0x75, 0x0D},                          // jnz     short loc_62
-  {1, 0xB9}, GAP(4),                        // mov     ecx, offset byte_118
-  {2, 0xEB, 0x0E},                          // jmp     short loc_6A
-  // ---------------------------------------------------------------------------
-  
-  //loc_5C:
-  {2, 0x3C, 0x2F},                          // cmp     al, 2Fh ; '/'
-  {3, 0x0F, 0x44, 0xCA},                    // cmovz   ecx, edx
-  {1, 0x42},                                // inc     edx
-  
-  //loc_62:
-  {4, 0x0F, 0xB6, 0x42, 0xFF},              // movzx   eax, byte ptr [edx-1]
-  {2, 0x84, 0xC0},                          // test    al, al
-  {2, 0x75, 0xF2},                          // jnz     short loc_5C
-  
-  //loc_6A:
-  {2, 0x89, 0x0D}, GAP(4),                  // mov     ds:___progname, ecx
-  {2, 0x89, 0xF3},                          // mov     ebx, esi
-  {2, 0xEB, 0x03},                          // jmp     short loc_77
-  // ---------------------------------------------------------------------------
-  
-  //loc_74:
-  {3, 0x83, 0xC3, 0x04},                    // add     ebx, 4
-  
-  //loc_77:
-  {2, 0x8B, 0x03},                          // mov     eax, [ebx]
-  {2, 0x85, 0xC0},                          // test    eax, eax
-  {2, 0x75, 0xF7},                          // jnz     short loc_74
-  {1, 0xA1}, GAP(4),                        // mov     eax, ds:_mach_init_routine_ptr
-  {2, 0x8B, 0x00},                          // mov     eax, [eax]
-  {2, 0x85, 0xC0},                          // test    eax, eax
-  {2, 0x74, 0x02},                          // jz      short loc_8A
-  {2, 0xFF, 0xD0},                          // call    eax
-  
-  //loc_8A:
-  {1, 0xA1}, GAP(4),                        // mov     eax, ds:__cthread_init_routine_ptr
-  {2, 0x8B, 0x00},                          // mov     eax, [eax]
-  {2, 0x85, 0xC0},                          // test    eax, eax
-  {2, 0x74, 0x02},                          // jz      short loc_97
-  {2, 0xFF, 0xD0},                          // call    eax
-  
-  //loc_97:
-  {1, 0xE8}, GAP(4),                        // call    near ptr ___keymgr_dwarf2_register_sections
-  {3, 0x8D, 0x45, 0xE0},                    // lea     eax, [ebp+var_20]
-  {4, 0x89, 0x44, 0x24, 0x04},              // mov     [esp+4], eax
-  {3, 0xC7, 0x04, 0x24}, GAP(4),            // mov     dword ptr [esp], offset a__dyld_make_de ; "__dyld_make_delayed_module_initializer_"...
-  {1, 0xE8}, GAP(4),                        // call    __dyld_func_lookup
-  {3, 0xFF, 0x55, 0xE0},                    // call    [ebp+var_20]
-  {3, 0x8D, 0x45, 0xE4},                    // lea     eax, [ebp+var_1C]
-  {4, 0x89, 0x44, 0x24, 0x04},              // mov     [esp+4], eax
-  {3, 0xC7, 0x04, 0x24}, GAP(4),            // mov     dword ptr [esp], offset a__dyld_mod_ter ; "__dyld_mod_term_funcs"
-  {1, 0xE8}, GAP(4),                        // call    __dyld_func_lookup
-  {3, 0x8B, 0x45, 0xE4},                    // mov     eax, [ebp+var_1C]
-  {2, 0x85, 0xC0},                          // test    eax, eax
-  {2, 0x74, 0x08},                          // jz      short loc_D4
-  {3, 0x89, 0x04, 0x24},                    // mov     [esp], eax      ; void (*)(void)
-  {1, 0xE8}, GAP(4),                        // call    near ptr _atexit
-  
-  //loc_D4:
-  {1, 0xA1}, GAP(4),                        // mov     eax, ds:_errno_ptr
-  {6, 0xC7, 0x00, 0x00, 0x00, 0x00, 0x00},  // mov     dword ptr [eax], 0
-  {3, 0x8D, 0x43, 0x04},                    // lea     eax, [ebx+4]
-  {4, 0x89, 0x44, 0x24, 0x0C},              // mov     [esp+0Ch], eax
-  {4, 0x89, 0x74, 0x24, 0x08},              // mov     [esp+8], esi
-  {4, 0x89, 0x7C, 0x24, 0x04},              // mov     [esp+4], edi
-  {3, 0x8B, 0x45, 0x08},                    // mov     eax, [ebp+arg_0]
-  {3, 0x89, 0x04, 0x24},                    // mov     [esp], eax
-  {1, 0xE8}, GAP(4),                        // call    near ptr _main
-  {3, 0x89, 0x04, 0x24},                    // mov     [esp], eax      ; int
-  {1, 0xE8}, GAP(4),                        // call    near ptr _exit
-};
-
-static AsmFootPrint const SDK106Target104X86_64 =
-{
-  //start:
-  {2, 0x6A, 0x00},                          // push    0
-  {3, 0x48, 0x89, 0xE5},                    // mov     rbp, rsp
-  {4, 0x48, 0x83, 0xE4, 0xF0},              // and     rsp, 0FFFFFFFFFFFFFFF0h
-  {4, 0x48, 0x8B, 0x7D, 0x08},              // mov     rdi, [rbp+8]
-  {4, 0x48, 0x8D, 0x75, 0x10},              // lea     rsi, [rbp+10h]
-  {2, 0x89, 0xFA},                          // mov     edx, edi
-  {3, 0x83, 0xC2, 0x01},                    // add     edx, 1
-  {3, 0xC1, 0xE2, 0x03},                    // shl     edx, 3
-  {3, 0x48, 0x01, 0xF2},                    // add     rdx, rsi
-  {5, 0xE8, 0x01, 0x00, 0x00, 0x00},        // call    __start
-  {1, 0xF4},                                // hlt
-
-  // __start
-  {1, 0x55},                                // push    rbp
-  {3, 0x48, 0x89, 0xE5},                    // mov     rbp, rsp
-  {2, 0x41, 0x56},                          // push    r14
-  {2, 0x41, 0x55},                          // push    r13
-  {2, 0x41, 0x54},                          // push    r12
-  {1, 0x53},                                // push    rbx
-  {4, 0x48, 0x83, 0xEC, 0x10},              // sub     rsp, 10h
-  {3, 0x41, 0x89, 0xFE},                    // mov     r14d, edi
-  {3, 0x49, 0x89, 0xF5},                    // mov     r13, rsi
-  {3, 0x49, 0x89, 0xD4},                    // mov     r12, rdx
-  {2, 0x89, 0x3D}, GAP(4),                  // mov     cs:_NXArgc, edi
-  {3, 0x48, 0x89, 0x35}, GAP(4),            // mov     cs:_NXArgv, rsi
-  {3, 0x48, 0x89, 0x15}, GAP(4),            // mov     cs:_environ, rdx
-  {3, 0x48, 0x8B, 0x0E},                    // mov     rcx, [rsi]
-  {4, 0x48, 0x8D, 0x41, 0x01},              // lea     rax, [rcx+1]
-  {3, 0x48, 0x85, 0xC9},                    // test    rcx, rcx
-  {2, 0x75, 0x13},                          // jnz     short loc_6D
-  {3, 0x48, 0x8D, 0x0D}, GAP(4),            // lea     rcx, LC0
-  {2, 0xEB, 0x12},                          // jmp     short loc_75
-  // ---------------------------------------------------------------------------
-
-  // loc_63
-  {3, 0x80, 0xFA, 0x2F},                    // cmp     dl, 2Fh ; '/'
-  {4, 0x48, 0x0F, 0x44, 0xC8},              // cmovz   rcx, rax
-  {3, 0x48, 0xFF, 0xC0},                    // inc     rax
-
-  // loc_6D
-  {4, 0x0F, 0xB6, 0x50, 0xFF},              // movzx   edx, byte ptr [rax-1]
-  {2, 0x84, 0xD2},                          // test    dl, dl
-  {2, 0x75, 0xEE},                          // jnz     short loc_63
-
-  // loc_75
-  {3, 0x48, 0x89, 0x0D}, GAP(4),            // mov     cs:___progname, rcx
-  {3, 0x4C, 0x89, 0xE3},                    // mov     rbx, r12
-  {2, 0xEB, 0x04},                          // jmp     short loc_85
-  // ---------------------------------------------------------------------------
-
-  // loc_81
-  {4, 0x48, 0x83, 0xC3, 0x08},              // add     rbx, 8
-
-  // loc_85
-  {4, 0x48, 0x83, 0x3B, 0x00},              // cmp     qword ptr [rbx], 0
-  {2, 0x75, 0xF6},                          // jnz     short loc_81
-  {3, 0x48, 0x8B, 0x05}, GAP(4),            // mov     rax, cs:_mach_init_routine
-  {3, 0x48, 0x8B, 0x00},                    // mov     rax, [rax]
-  {3, 0x48, 0x85, 0xC0},                    // test    rax, rax
-  {2, 0x74, 0x02},                          // jz      short loc_9C
-  {2, 0xFF, 0xD0},                          // call    rax
-
-  // loc_9C
-  {3, 0x48, 0x8B, 0x05}, GAP(4),            // mov     rax, cs:__cthread_init_routine
-  {3, 0x48, 0x8B, 0x00},                    // mov     rax, [rax]
-  {3, 0x48, 0x85, 0xC0},                    // test    rax, rax
-  {2, 0x74, 0x02},                          // jz      short loc_AD
-  {2, 0xFF, 0xD0},                          // call    rax
-
-  // loc_AD
-  {1, 0xE8}, GAP(4),                        // call    near ptr ___keymgr_dwarf2_register_sections
-  {4, 0x48, 0x8D, 0x75, 0xD0},              // lea     rsi, [rbp+var_30]
-  {3, 0x48, 0x8D, 0x3D}, GAP(4),            // lea     rdi, LC1        ; "__dyld_make_delayed_module_initializer_"...
-  {1, 0xE8}, GAP(4),                        // call    __dyld_func_lookup
-  {3, 0xFF, 0x55, 0xD0},                    // call    [rbp+var_30]
-  {4, 0x48, 0x8D, 0x75, 0xD8},              // lea     rsi, [rbp+var_28]
-  {3, 0x48, 0x8D, 0x3D}, GAP(4),            // lea     rdi, LC2        ; "__dyld_mod_term_funcs"
-  {1, 0xE8}, GAP(4),                        // call    __dyld_func_lookup
-  {4, 0x48, 0x8B, 0x7D, 0xD8},              // mov     rdi, [rbp+var_28]
-  {3, 0x48, 0x85, 0xFF},                    // test    rdi, rdi
-  {2, 0x74, 0x05},                          // jz      short loc_E3
-  {1, 0xE8}, GAP(4),                        // call    near ptr _atexit
-
-  // loc_E3
-  {3, 0x48, 0x8B, 0x05}, GAP(4),            // mov     rax, cs:_errno
-  {6, 0xC7, 0x00, 0x00, 0x00, 0x00, 0x00},  // mov     dword ptr [rax], 0
-  {4, 0x48, 0x8D, 0x4B, 0x08},              // lea     rcx, [rbx+8]
-  {3, 0x4C, 0x89, 0xE2},                    // mov     rdx, r12
-  {3, 0x4C, 0x89, 0xEE},                    // mov     rsi, r13
-  {3, 0x44, 0x89, 0xF7},                    // mov     edi, r14d
-  {1, 0xE8}, GAP(4),                        // call    near ptr _main
-  {2, 0x89, 0xC7},                          // mov     edi, eax
-  {1, 0xE8}, GAP(4),                        // call    near ptr _exit
-};
-
 //==================================
 // SDK:10.5 DeployTarget:10.5
 // MacOSX10.5.sdk/usr/lib/crt1.10.5.o
 //==================================
+// 定义静态常量数组SDK105Target105X86，存储SDK 10.5的目标10.5 X86机器码指纹
 static AsmFootPrint const SDK105Target105X86 =
 {
   //start:
@@ -1081,6 +889,7 @@ static AsmFootPrint const SDK105Target105X86 =
   {1, 0xE8}, GAP(4),                        // call    near ptr _exit
 };
 
+// 定义静态常量数组SDK105Target105X86_64，存储SDK 10.5的目标10.5 X86_64机器码指纹
 static AsmFootPrint const SDK105Target105X86_64 =
 {
   //start:
@@ -1110,9 +919,221 @@ static AsmFootPrint const SDK105Target105X86_64 =
 };
   
 //==================================
+// SDK:10.6 DeployTarget:10.4
+// MacOSX10.6.sdk/usr/lib/crt1.o
+//==================================
+// 定义静态常量数组SDK106Target104X86，存储SDK 10.6的目标10.4 X86机器码指纹
+static AsmFootPrint const SDK106Target104X86 =
+{
+  //start:
+  {2, 0x6A, 0x00},                          // push    0
+  {2, 0x89, 0xE5},                          // mov     ebp, esp
+  {3, 0x83, 0xE4, 0xF0},                    // and     esp, 0FFFFFFF0h
+  {3, 0x83, 0xEC, 0x10},                    // sub     esp, 10h
+  {3, 0x8B, 0x5D, 0x04},                    // mov     ebx, [ebp+4]
+  {4, 0x89, 0x5C, 0x24, 0x00},              // mov     [esp+14h+var_14], ebx
+  {3, 0x8D, 0x4D, 0x08},                    // lea     ecx, [ebp+8]
+  {4, 0x89, 0x4C, 0x24, 0x04},              // mov     [esp+14h+var_10], ecx
+  {3, 0x83, 0xC3, 0x01},                    // add     ebx, 1
+  {3, 0xC1, 0xE3, 0x02},                    // shl     ebx, 2
+  {2, 0x01, 0xCB},                          // add     ebx, ecx
+  {4, 0x89, 0x5C, 0x24, 0x08},              // mov     [esp+14h+var_C], ebx
+  {5, 0xE8, 0x01, 0x00, 0x00, 0x00},        // call    __start
+  {1, 0xF4},                                // hlt
+  
+  //__start:
+  {1, 0x55},                                // push    ebp
+  {2, 0x89, 0xE5},                          // mov     ebp, esp
+  {1, 0x57},                                // push    edi
+  {1, 0x56},                                // push    esi
+  {1, 0x53},                                // push    ebx
+  {3, 0x83, 0xEC, 0x2C},                    // sub     esp, 2Ch
+  {3, 0x8B, 0x75, 0x0C},                    // mov     esi, [ebp+arg_4]
+  {3, 0x8B, 0x45, 0x08},                    // mov     eax, [ebp+arg_0]
+  {3, 0x8B, 0x5D, 0x10},                    // mov     ebx, [ebp+arg_8]
+  {2, 0x89, 0x35}, GAP(4),                  // mov     ds:_NXArgv, esi
+  {1, 0xA3}, GAP(4),                        // mov     ds:_NXArgc, eax
+  {2, 0x89, 0x1D}, GAP(4),                  // mov     ds:_environ, ebx
+  {2, 0x8B, 0x0E},                          // mov     ecx, [esi]
+  {2, 0x85, 0xC9},                          // test    ecx, ecx
+  {3, 0x8D, 0x41, 0x01},                    // lea     eax, [ecx+1]
+  {2, 0x75, 0x0E},                          // jnz     short loc_64
+  {1, 0xB9}, GAP(4),                        // mov     ecx, offset byte_118
+  {2, 0xEB, 0x0F},                          // jmp     short loc_6C
+  // ---------------------------------------------------------------------------
+  
+  //loc_5D:
+  {3, 0x80, 0xFA, 0x2F},                    // cmp     dl, 2Fh ; '/'
+  {3, 0x0F, 0x44, 0xC8},                    // cmovz   ecx, eax
+  {1, 0x40},                                // inc     eax
+  
+  //loc_64:
+  {4, 0x0F, 0xB6, 0x50, 0xFF},              // movzx   edx, byte ptr [eax-1]
+  {2, 0x84, 0xD2},                          // test    dl, dl
+  {2, 0x75, 0xF1},                          // jnz     short loc_5D
+  
+  //loc_6C:
+  {2, 0x89, 0xD8},                          // mov     eax, ebx
+  {2, 0x89, 0x0D}, GAP(4),                  // mov     ds:___progname, ecx
+  {2, 0xEB, 0x03},                          // jmp     short loc_79
+  // ---------------------------------------------------------------------------
+  
+  //loc_76:
+  {3, 0x83, 0xC0, 0x04},                    // add     eax, 4
+  
+  //loc_79:
+  {2, 0x8B, 0x10},                          // mov     edx, [eax]
+  {2, 0x85, 0xD2},                          // test    edx, edx
+  {2, 0x75, 0xF7},                          // jnz     short loc_76
+  {3, 0x8D, 0x78, 0x04},                    // lea     edi, [eax+4]
+  {1, 0xA1}, GAP(4),                        // mov     eax, ds:_mach_init_routine_ptr
+  {2, 0x8B, 0x00},                          // mov     eax, [eax]
+  {2, 0x85, 0xC0},                          // test    eax, eax
+  {2, 0x74, 0x02},                          // jz      short loc_8F
+  {2, 0xFF, 0xD0},                          // call    eax
+  
+  //loc_8F:
+  {1, 0xA1}, GAP(4),                        // mov     eax, ds:__cthread_init_routine_ptr
+  {2, 0x8B, 0x00},                          // mov     eax, [eax]
+  {2, 0x85, 0xC0},                          // test    eax, eax
+  {2, 0x74, 0x02},                          // jz      short loc_9C
+  {2, 0xFF, 0xD0},                          // call    eax
+  
+  //loc_9C:
+  {1, 0xE8}, GAP(4),                        // call    near ptr ___keymgr_dwarf2_register_sections
+  {3, 0x8D, 0x45, 0xE0},                    // lea     eax, [ebp+var_20]
+  {4, 0x89, 0x44, 0x24, 0x04},              // mov     [esp+4], eax
+  {3, 0xC7, 0x04, 0x24}, GAP(4),            // mov     dword ptr [esp], offset a__dyld_make_de ; "__dyld_make_delayed_module_initializer_"...
+  {1, 0xE8}, GAP(4),                        // call    __dyld_func_lookup
+  {3, 0xFF, 0x55, 0xE0},                    // call    [ebp+var_20]
+  {3, 0x8D, 0x45, 0xE4},                    // lea     eax, [ebp+var_1C]
+  {4, 0x89, 0x44, 0x24, 0x04},              // mov     [esp+4], eax
+  {3, 0xC7, 0x04, 0x24}, GAP(4),            // mov     dword ptr [esp], offset a__dyld_mod_ter ; "__dyld_mod_term_funcs"
+  {1, 0xE8}, GAP(4),                        // call    __dyld_func_lookup
+  {3, 0x8B, 0x45, 0xE4},                    // mov     eax, [ebp+var_1C]
+  {2, 0x85, 0xC0},                          // test    eax, eax
+  {2, 0x74, 0x08},                          // jz      short loc_D9
+  {3, 0x89, 0x04, 0x24},                    // mov     [esp], eax      ; void (*)(void)
+  {1, 0xE8}, GAP(4),                        // call    near ptr _atexit
+  
+  //loc_D9:
+  {1, 0xA1}, GAP(4),                        // mov     eax, ds:_errno_ptr
+  {6, 0xC7, 0x00, 0x00, 0x00, 0x00, 0x00},  // mov     dword ptr [eax], 0
+  {3, 0x8B, 0x45, 0x08},                    // mov     eax, [ebp+arg_0]
+  {4, 0x89, 0x7C, 0x24, 0x0C},              // mov     [esp+0Ch], edi
+  {4, 0x89, 0x5C, 0x24, 0x08},              // mov     [esp+8], ebx
+  {4, 0x89, 0x74, 0x24, 0x04},              // mov     [esp+4], esi
+  {3, 0x89, 0x04, 0x24},                    // mov     [esp], eax
+  {1, 0xE8}, GAP(4),                        // call    near ptr _main
+  {3, 0x89, 0x04, 0x24},                    // mov     [esp], eax      ; int
+  {1, 0xE8}, GAP(4),                        // call    near ptr _exit
+};
+
+// 定义静态常量数组SDK106Target104X86_64，存储SDK 10.6的目标10.4 X86_64机器码指纹
+static AsmFootPrint const SDK106Target104X86_64 =
+{
+  //start:
+  {2, 0x6A, 0x00},                          // push    0
+  {3, 0x48, 0x89, 0xE5},                    // mov     rbp, rsp
+  {4, 0x48, 0x83, 0xE4, 0xF0},              // and     rsp, 0FFFFFFFFFFFFFFF0h
+  {4, 0x48, 0x8B, 0x7D, 0x08},              // mov     rdi, [rbp+8]
+  {4, 0x48, 0x8D, 0x75, 0x10},              // lea     rsi, [rbp+10h]
+  {2, 0x89, 0xFA},                          // mov     edx, edi
+  {3, 0x83, 0xC2, 0x01},                    // add     edx, 1
+  {3, 0xC1, 0xE2, 0x03},                    // shl     edx, 3
+  {3, 0x48, 0x01, 0xF2},                    // add     rdx, rsi
+  {5, 0xE8, 0x01, 0x00, 0x00, 0x00},        // call    __start
+  {1, 0xF4},                                // hlt
+
+  // __start
+  {1, 0x55},                                // push    rbp
+  {3, 0x48, 0x89, 0xE5},                    // mov     rbp, rsp
+  {2, 0x41, 0x56},                          // push    r14
+  {3, 0x41, 0x89, 0xFE},                    // mov     r14d, edi
+  {2, 0x41, 0x55},                          // push    r13
+  {2, 0x41, 0x54},                          // push    r12
+  {3, 0x49, 0x89, 0xF4},                    // mov     r12, rsi
+  {1, 0x53},                                // push    rbx
+  {3, 0x48, 0x89, 0xD3},                    // mov     rbx, rdx
+  {4, 0x48, 0x83, 0xEC, 0x10},              // sub     rsp, 10h
+  {2, 0x89, 0x3D}, GAP(4),                  // mov     cs:_NXArgc, edi
+  {3, 0x48, 0x89, 0x35}, GAP(4),            // mov     cs:_NXArgv, rsi
+  {3, 0x48, 0x89, 0x15}, GAP(4),            // mov     cs:_environ, rdx
+  {3, 0x48, 0x8B, 0x0E},                    // mov     rcx, [rsi]
+  {3, 0x48, 0x85, 0xC9},                    // test    rcx, rcx
+  {4, 0x48, 0x8D, 0x41, 0x01},              // lea     rax, [rcx+1]
+  {2, 0x75, 0x13},                          // jnz     short loc_6D
+  {3, 0x48, 0x8D, 0x0D}, GAP(4),            // lea     rcx, LC0
+  {2, 0xEB, 0x12},                          // jmp     short loc_75
+  // ---------------------------------------------------------------------------
+
+  // loc_63
+  {3, 0x80, 0xFA, 0x2F},                    // cmp     dl, 2Fh ; '/'
+  {4, 0x48, 0x0F, 0x44, 0xC8},              // cmovz   rcx, rax
+  {3, 0x48, 0xFF, 0xC0},                    // inc     rax
+
+  // loc_6D
+  {4, 0x0F, 0xB6, 0x50, 0xFF},              // movzx   edx, byte ptr [rax-1]
+  {2, 0x84, 0xD2},                          // test    dl, dl
+  {2, 0x75, 0xEE},                          // jnz     short loc_63
+
+  // loc_75
+  {3, 0x48, 0x89, 0xD8},                    // mov     rax, rbx
+  {3, 0x48, 0x89, 0x0D}, GAP(4),            // mov     cs:___progname, rcx
+  {2, 0xEB, 0x04},                          // jmp     short loc_85
+  // ---------------------------------------------------------------------------
+
+  // loc_81
+  {4, 0x48, 0x83, 0xC0, 0x08},              // add     rax, 8
+
+  // loc_85
+  {4, 0x48, 0x83, 0x38, 0x00},              // cmp     qword ptr [rax], 0
+  {2, 0x75, 0xF6},                          // jnz     short loc_81
+  {4, 0x4C, 0x8D, 0x68, 0x08},              // lea     r13, [rax+8]
+  {3, 0x48, 0x8B, 0x05}, GAP(4),            // mov     rax, cs:_mach_init_routine
+  {3, 0x48, 0x8B, 0x00},                    // mov     rax, [rax]
+  {3, 0x48, 0x85, 0xC0},                    // test    rax, rax
+  {2, 0x74, 0x02},                          // jz      short loc_A0
+  {2, 0xFF, 0xD0},                          // call    rax
+
+  // loc_A0
+  {3, 0x48, 0x8B, 0x05}, GAP(4),            // mov     rax, cs:__cthread_init_routine
+  {3, 0x48, 0x8B, 0x00},                    // mov     rax, [rax]
+  {3, 0x48, 0x85, 0xC0},                    // test    rax, rax
+  {2, 0x74, 0x02},                          // jz      short loc_B1
+  {2, 0xFF, 0xD0},                          // call    rax
+
+  // loc_B1
+  {1, 0xE8}, GAP(4),                        // call    near ptr ___keymgr_dwarf2_register_sections
+  {4, 0x48, 0x8D, 0x75, 0xD0},              // lea     rsi, [rbp+var_30]
+  {3, 0x48, 0x8D, 0x3D}, GAP(4),            // lea     rdi, LC1        ; "__dyld_make_delayed_module_initializer_"...
+  {1, 0xE8}, GAP(4),                        // call    __dyld_func_lookup
+  {3, 0xFF, 0x55, 0xD0},                    // call    [rbp+var_30]
+  {3, 0x48, 0x8D, 0x3D}, GAP(4),            // lea     rdi, LC2        ; "__dyld_mod_term_funcs"
+  {4, 0x48, 0x8D, 0x75, 0xD8},              // lea     rsi, [rbp+var_28]
+  {1, 0xE8}, GAP(4),                        // call    __dyld_func_lookup
+  {4, 0x48, 0x8B, 0x7D, 0xD8},              // mov     rdi, [rbp+var_28]
+  {3, 0x48, 0x85, 0xFF},                    // test    rdi, rdi
+  {2, 0x74, 0x05},                          // jz      short loc_E7
+  {1, 0xE8}, GAP(4),                        // call    near ptr _atexit
+
+  // loc_E7
+  {3, 0x48, 0x8B, 0x05}, GAP(4),            // mov     rax, cs:_errno
+  {3, 0x44, 0x89, 0xF7},                    // mov     edi, r14d
+  {3, 0x4C, 0x89, 0xE9},                    // mov     rcx, r13
+  {3, 0x48, 0x89, 0xDA},                    // mov     rdx, rbx
+  {3, 0x4C, 0x89, 0xE6},                    // mov     rsi, r12
+  {6, 0xC7, 0x00, 0x00, 0x00, 0x00, 0x00},  // mov     dword ptr [rax], 0
+  {1, 0xE8}, GAP(4),                        // call    near ptr _main
+  {2, 0x89, 0xC7},                          // mov     edi, eax
+  {1, 0xE8}, GAP(4),                        // call    near ptr _exit
+};
+
+//==================================
 // SDK:10.6 DeployTarget:10.5
 // MacOSX10.6.sdk/usr/lib/crt1.10.5.o
 //==================================
+// 定义静态常量数组SDK106Target105X86，存储SDK 10.6的目标10.5 X86机器码指纹
 static AsmFootPrint const SDK106Target105X86 =
 {
   //start:
@@ -1140,6 +1161,7 @@ static AsmFootPrint const SDK106Target105X86 =
   {1, 0xE8}, GAP(4),                        // call    near ptr _exit
 };
 
+// 定义静态常量数组SDK106Target104X86v2，存储SDK 10.6的目标10.4 X86机器码指纹版本2
 static AsmFootPrint const SDK106Target104X86v2 =
 {
   //start:
@@ -1246,6 +1268,7 @@ static AsmFootPrint const SDK106Target104X86v2 =
   {1,  0xE8}, GAP(4),                       // call    _exit
 };
 
+// 定义静态常量数组SDK109Target104X86，存储SDK 10.9的目标10.4 X86机器码指纹
 static AsmFootPrint const SDK109Target104X86 = {
   // start
   { 2, 0x6A, 0x00 },                          // push    0
@@ -1367,111 +1390,151 @@ static AsmFootPrint const SDK109Target104X86 = {
 //SDK106Target106X86_64 == SDK106Target105X86_64;
 
 //==============================================================================
+// MachOLayout类的CRTFootPrints分类实现
 @implementation MachOLayout (CRTFootPrints)
 
 //------------------------------------------------------------------------------
+// 在指定偏移处匹配机器码指纹
 - (bool) matchAsmAtOffset:(uint64_t)offset 
              asmFootPrint:(const AsmFootPrint)footprint 
                 lineCount:(NSUInteger)lineCount
 {
+  // 检查dataController是否为空（弱引用可能失效）
   if (!dataController) // dataController is weak
+    // 如果为空，返回匹配失败
     return false;
   
+  // 获取文件数据的原始字节指针，并偏移到指定位置
   uint8_t const * data = ((uint8_t *)[dataController.fileData bytes]) + offset;
   
+  // 遍历指纹中的每一行
   for (NSUInteger i = 0; i < lineCount; ++i)
   {
+    // 获取当前行的指纹数据
     uint8_t const * asmEntry = footprint[i];
+    // 第一个字节表示该行指令的长度（或跳过的字节数）
     int size = asmEntry[0];
     
     // is it a gap to skip ?
+    // 如果长度为0，表示这是一个GAP（跳过匹配）
     if (size == 0)
     {
+      // 获取GAP的大小（第二个字节）
       size = asmEntry[1];
     }
+    // 否则，进行内存比较
     else if (memcmp(data, asmEntry + 1, size))
     {
+      // 如果内存内容与指纹不符，返回匹配失败
       return false;
     }
+    // 移动数据指针到下一条指令或跳过GAP
     data += size;
   }
   
+  // 所有行匹配成功，返回true
   return true;
 }
 
 //------------------------------------------------------------------------------
+// 确定Mach-O文件的运行时版本
 - (void) determineRuntimeVersion
 {
+    // 检查dataController是否为空
     if (!dataController) { // dataController is weak
+        // 如果为空，直接返回
         return;
     }
 
+    // 检查入口点是否为0
     if (entryPoint == 0) {
+        // 如果不是可执行文件、无入口点或无法检测，直接返回
         return; // not an executable, no entry point, or cannot detect
     }
 
     // find file offset of the entry point
+    // 将入口点的RVA（相对虚拟地址）转换为文件偏移
     uint64_t offset = [self RVAToFileOffset:entryPoint];
+    // 打印入口点的文件偏移日志
     NSLog(@"%@: file offset of OEP: 0x%llX", self, offset);
   
+    // 获取文件数据总长度
     uint64_t dataLength = [dataController.fileData length];
   
+    // 检查偏移是否越界
     if (offset >= dataLength) {
+        // 如果越界，直接返回
         return;
     }
   
   // test against footprints
+  // 根据架构位数分别匹配指纹
   if ([self is64bit] == NO) {
+    // 32位架构匹配
     if (MATCHASM(SDK104Target104X86v1)) {
+      // 匹配到SDK 10.4 Target 10.4 v1
       NSLog(@"SDK104Target104X86v1 matched");
+      // 更新根节点标题，追加版本信息
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.4 Target10.4]"];
+      // 匹配成功后返回
       return;
     }
     else if (MATCHASM(SDK104Target104X86v2)) {
+      // 匹配到SDK 10.4 Target 10.4 v2
       NSLog(@"SDK104Target104X86v2 matched");
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.4 Target10.4]"];
       return;
     }
     else if (MATCHASM(SDK104Target104X86v3)) {
+      // 匹配到SDK 10.4 Target 10.4 v3
       NSLog(@"SDK104Target104X86v3 matched");
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.4 Target10.4]"];
       return;
     }
     else if (MATCHASM(SDK104Target104X86v4)) {
+      // 匹配到SDK 10.4 Target 10.4 v4
       NSLog(@"SDK104Target104X86v4 matched");
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.4 Target10.4]"];
       return;
     }
     else if (MATCHASM(SDK105Target104X86)) {
+      // 匹配到SDK 10.5 Target 10.4
       NSLog(@"SDK105Target104X86 matched");
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.5 Target10.4]"];
       return;
     }
     else if (MATCHASM(SDK105Target105X86)) {
+      // 匹配到SDK 10.5 Target 10.5
       NSLog(@"SDK105Target105X86 matched");
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.5 Target10.5]"];
       return;
     }
     else if (MATCHASM(SDK106Target104X86) || MATCHASM(SDK106Target104X86v2)) {
+      // 匹配到SDK 10.6 Target 10.4
       NSLog(@"SDK106Target104X86 matched");
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.6 Target10.4]"];
       return;
     }
     else if (MATCHASM(SDK106Target105X86)) {
+      // 匹配到SDK 10.6 Target 10.5
       NSLog(@"SDK106Target105X86 matched");
       
+      // 进一步检查是否存在LC_DYLD_INFO_ONLY命令，区分Target 10.6和10.5
       for (CommandVector::const_iterator cmdIter = commands.begin(); cmdIter != commands.end(); ++cmdIter) {
         struct load_command const * load_command = *cmdIter;
         if (load_command->cmd == LC_DYLD_INFO_ONLY) {
+          // 如果存在LC_DYLD_INFO_ONLY，则是Target 10.6
           rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.6 Target10.6]"]; 
           NSLog(@"LC_DYLD_INFO_ONLY  ==> target10.6");
           return;
         }
       }
+      // 否则是Target 10.5
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.6 Target10.5]"];
       return;
     }
     else if (MATCHASM (SDK109Target104X86)) {
+      // 匹配到SDK 10.9 Target 10.4
       NSLog(@"SDK109Target104X86 matched");
 
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.9 Target10.4]"];
@@ -1479,32 +1542,40 @@ static AsmFootPrint const SDK109Target104X86 = {
     }
   }
   else {
+    // 64位架构匹配
     if (MATCHASM(SDK104Target104X86_64)) {
+      // 匹配到SDK 10.4 Target 10.4 X86_64
       NSLog(@"SDK104Target104X86_64 matched");
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.4 Target10.4]"];
       return;
     }
     else if (MATCHASM(SDK105Target104X86_64)) {
+      // 匹配到SDK 10.5 Target 10.4 X86_64
       NSLog(@"SDK105Target104X86_64 matched");
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.5 Target10.4]"];
       return;
     }
     else if (MATCHASM(SDK106Target104X86_64)) {
+      // 匹配到SDK 10.6 Target 10.4 X86_64
       NSLog(@"SDK106Target104X86_64 matched");
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.6 Target10.4]"];
       return;
     }
     else if (MATCHASM(SDK105Target105X86_64)) {
+      // 匹配到SDK 10.5 Target 10.5 X86_64
       NSLog(@"SDK105Target105X86_64 matched");
       
+      // 进一步检查LC_DYLD_INFO_ONLY命令，区分SDK版本
       for (CommandVector::const_iterator cmdIter = commands.begin(); cmdIter != commands.end(); ++cmdIter) {
         struct load_command const * load_command = *cmdIter;
         if (load_command->cmd == LC_DYLD_INFO_ONLY) {
+          // 如果存在，判定为SDK 10.6
           NSLog(@"LC_DYLD_INFO_ONLY  ==> target10.6");
           rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.6]"]; 
           return;
         }
       }
+      // 否则判定为SDK 10.5
       rootNode.caption = [rootNode.caption stringByAppendingString:@" [SDK10.5]"];
       return;
     }
@@ -1513,4 +1584,3 @@ static AsmFootPrint const SDK109Target104X86 = {
 //------------------------------------------------------------------------------
 
 @end
-
